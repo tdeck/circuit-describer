@@ -144,17 +144,15 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             # Note: unconnected part will still take a designator slot for now
 
     # Traverse all the adjacencies to build the nets
-    nets: List[Set[PinRef]] = [set([p]) for p in set([  # Start with each PinRef in its own set
+    nets: List[Set[PinRef]] = [set([p]) for p in sorted(set([  # Start with each PinRef in its own set
         p
         for adj in adjacencies
         for p in adj
-    ])]
-    print("Start nets len", len(nets))
+    ]))]
 
     while True:
         merged_something = False
         i = 0
-        print("Outer round")
         while i < len(nets) - 1:
             nets_to_merge = set()
             for p in nets[i]:
@@ -172,29 +170,27 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             nets = [n for j, n in enumerate(nets) if j not in nets_to_merge]
 
             if nets_to_merge:
-                print("Merged nets", [i] + list(nets_to_merge))
                 merged_something = True
 
             i += 1
 
         if not merged_something:
-            print("Breaking")
             break
 
-    print("Len:", len(nets))
+    for i, net in enumerate(sorted(nets)):
+        connections = [
+            Connection(
+                part_instance=schematic.part_instances_by_id[p.part_instance_id],
+                pin_id=p.pin_id,
+            )
+            for p in sorted(net)
+            if p.part_instance_id not in wire_instance_ids
+        ]
 
-    pprint(nets)
+        node_id = f"node{i}"
+        schematic.nodes_by_id[node_id] = Node(node_id=node_id, connections=connections)
 
-    for i, net in enumerate(nets):
-        print("Net", i)
-        for pinref in net:
-            if pinref.part_instance_id in wire_instance_ids:
-                continue
-
-            part_inst = schematic.part_instances_by_id[pinref.part_instance_id]
-            print(f"    {part_inst.designator} ({part_inst.part.short_name}) {part_inst.part.pins[pinref.pin_id].short_name}")
-
-    return None
+    return schematic
 
 
 def load_core_parts() -> PartsBin:
@@ -234,4 +230,6 @@ def parse_sketch(parts_bin: PartsBin, path: str) -> Schematic:
             return parse_schematic(parts_bin, fh)
 
 parts_bin = load_core_parts()
-parse_sketch(parts_bin, INFILE)
+schematic = parse_sketch(parts_bin, INFILE)
+
+pprint(schematic)
