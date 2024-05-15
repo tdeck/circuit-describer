@@ -9,6 +9,7 @@ pytest = "*"
 [packages]
 lxml = "*"
 types-lxml = "*"
+inscriptis = "*"
 
 [requires]
 python_version = "3.10"

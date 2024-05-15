@@ -7,6 +7,7 @@ import os
 import re
 
 from lxml import etree
+from inscriptis import get_text as html_to_text
 from models import *
 
 from pprint import pprint # TODO debug
@@ -35,6 +36,13 @@ class PinRef:
     pin_id: PinID
 
 
+def clean_pin_name(name: str):
+    name = name.strip()
+    name = re.sub(r'^pin(\d)', '\1', name, flags=re.IGNORECASE)
+    name = re.sub(r'^pin ', '', name, flags=re.IGNORECASE)
+    return name
+
+
 def parse_parts_file(fh: TextIOWrapper) -> Part:
     module_tag = etree.parse(fh).getroot()
     
@@ -42,7 +50,9 @@ def parse_parts_file(fh: TextIOWrapper) -> Part:
     short_name = module_tag.find('./title').text
 
     desc_tag = module_tag.find('./description')
-    description = None if desc_tag is None else desc_tag.text # This can be HTML unfortunately, TODO fix it
+    description = None if desc_tag is None else desc_tag.text
+    if description and '<!DOCTYPE' in description:
+        description = html_to_text(description)
 
     label_tag = module_tag.find('./label')
     designator_prefix = 'U' if label_tag is None else label_tag.text
@@ -51,13 +61,12 @@ def parse_parts_file(fh: TextIOWrapper) -> Part:
 
     for connector_tag in module_tag.findall('./connectors/connector'):
         pid = connector_tag.get('id')
-        pin_short_name = connector_tag.get('name') # TODO enhance this "pin 12" "Pin 3"
-
-        if re.match(r'^pin\d', pin_short_name):
-            pin_short_name = pin_short_name[3:]
+        pin_short_name = clean_pin_name(connector_tag.get('name'))
 
         pin_desc_tag = connector_tag.find('./description')
         pin_desc = None if pin_desc_tag is None else pin_desc_tag.text
+        if pin_desc and '<!DOCTYPE' in pin_desc:
+            pin_desc = html_to_text(pin_desc)
 
         pins[pid] = PartPin(pin_id=pid, short_name=pin_short_name, description=pin_desc)
 
