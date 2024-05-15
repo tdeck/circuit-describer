@@ -1,0 +1,73 @@
+<h2>Part info</h2>
+{% for part in parts %}
+  <h3>{{ part.part.short_name }}</h3>
+  <pre>{{ part.part.description }}</pre>
+
+  <h4>Pin descriptions</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Pin</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for pin in part.part.pins.values() %}
+        {% if pin.description %}
+          <tr>
+            <td>{{ pin.short_name }}</td>
+            <td>{{ pin.description }}</td>
+          </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+{% endfor %}
+
+<h2>Bill of materials</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Part</th><th>Count</th><th>Components</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for part in parts %}
+      <tr>
+        <td>{{ part.part.short_name }}</td>
+        <td>{{ part.instances | length }}</td>
+        <td>
+          {% for inst in part.instances %}
+            {{ inst.designator }}{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Connected nets</h2>
+All points in a row of the nets table are connected by wires.
+
+<table>
+  <thead>
+    <tr>
+      <th>Circuit node</th> <th>Connected pins</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for net in schematic.nodes_by_id.values() %}
+      <tr>
+        <td>Net {{ loop.index }}</td>
+        <td>
+          <ul>
+            {% for conn in net.connections %}
+              <li>{{ conn.part_instance.designator }} {{ conn.part_instance.part.pin_reference(conn.pin_id) }}</li>
+            {% endfor %}
+          </ul>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+

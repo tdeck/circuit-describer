@@ -10,9 +10,6 @@ from lxml import etree
 from inscriptis import get_text as html_to_text
 from models import *
 
-from pprint import pprint # TODO debug
-
-
 """
 Data model notes
 
@@ -25,7 +22,6 @@ WIRE_MODULE_ID = 'WireModuleID'
 SCHEMATIC_LAYERS = {'schematic', 'schematicTrace'}
 
 CORE_PARTS_DB_PATH = '/usr/share/fritzing/parts/core'
-INFILE = '/home/troy/tmp/fritzing/inputs/recent_rpi_pico_simon.fzz'
 
 
 PartsBin = Dict[str, Part]
@@ -237,8 +233,3 @@ def parse_sketch(parts_bin: PartsBin, path: str) -> Schematic:
         # Parse the schematic file
         with zf.open(fz_files[0]) as fh:
             return parse_schematic(parts_bin, fh)
-
-parts_bin = load_core_parts()
-schematic = parse_sketch(parts_bin, INFILE)
-
-pprint(schematic)

@@ -23,10 +23,10 @@ class Part:
     designator_prefix: str
     pins: Dict[PinID, PartPin]
 
-    def pin_reference(pin_id: PinID) -> str:
-        kind = 'lead' if len(pins) <= 3 else 'pin'
+    def pin_reference(self, pin_id: PinID) -> str:
+        kind = 'lead' if len(self.pins) <= 3 else 'pin'
 
-        short_name = pins[pin_id].short_name
+        short_name = self.pins[pin_id].short_name
         if short_name.isnumeric():
             return f"{kind} {short_name}"  # e.g. "lead 0", "pin 0"
         else:
@@ -40,6 +40,9 @@ class PartInstance:
     designator: str  # e.g. C1
     part: Part
 
+    def __lt__(self, other):
+        return self.part_instance_id < other.part_instance_id
+
 
 @dataclass(frozen=True)
 class Connection:
@@ -50,7 +53,7 @@ class Connection:
 @dataclass
 class Node:
     node_id: NodeID
-    connections: Set[Connection]
+    connections: List[Connection]
 
 
 @dataclass
