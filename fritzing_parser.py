@@ -19,8 +19,12 @@ PartInstanceID is a fritzing modelIndex.
 
 PART_EXTENSION = '.fzp'
 WIRE_MODULE_ID = 'WireModuleID'
+NET_LABEL_MODULE_ID = 'NetLabelModuleID'
 SCHEMATIC_LAYERS = {'schematic', 'schematicTrace'}
 
+# These resources are usually built into the binary by Qt so I had to get them from GitHub
+FZ_RESOURCES_DB_PATH = '/home/troy/Downloads/fritzing-app/resources/parts/core'
+# These are installed by Fritzing outside the resource bundle for some reason
 CORE_PARTS_DB_PATH = '/usr/share/fritzing/parts/core'
 
 
@@ -39,7 +43,7 @@ def clean_pin_name(name: str):
     return name
 
 
-def parse_parts_file(fh: TextIOWrapper) -> Part:
+def parse_part_file(fh: TextIOWrapper) -> Part:
     module_tag = etree.parse(fh).getroot()
     
     module_id = module_tag.get('moduleId')
@@ -85,12 +89,15 @@ def sort_adj(a, b):
 def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
     xml_doc = etree.parse(fh)
 
-    # First we list the wires. They're redundant for nodes in the schematic so we want to ignore them
-    wire_instance_ids: Set[str] = set([
+    # First we list the wires. They're redundant for nodes in the schematic so we want to ignore them when producing
+    # the final result. Another thing these all have in common is their one pin called "common".
+    connector_instance_ids: Set[str] = set([
         e.get('modelIndex') for e in
             # Note: lxml's xpath doesn't support selecting attribute values directly, only nodes
-            xml_doc.findall(f"./instances/instance[@moduleIdRef='{WIRE_MODULE_ID}']")
+            xml_doc.findall(f"./instances/instance")
+            if e.get('moduleIdRef') in [NET_LABEL_MODULE_ID, WIRE_MODULE_ID]
     ])
+    net_labels: Dict[str, str] = {}  # Maps net label node instance IDs to 
 
     schematic = Schematic()
     adjacencies: Set[Tuple[PinRef, PinRef]] = set()
@@ -98,6 +105,7 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
 
     for instance in xml_doc.findall('./instances/instance'):
         module_id_ref = instance.get('moduleIdRef')
+        is_net_label = module_id_ref == NET_LABEL_MODULE_ID
         is_wire = module_id_ref == WIRE_MODULE_ID
 
         schematic_view = instance.find('./views/schematicView')
@@ -111,7 +119,10 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
         # Find all the connections and put them in the adjacency list
         for connector in schematic_view.findall('./connectors/connector'):
             # Treat all endpoints of a wire as the same node so they end up adjacent
-            pin_id = 'common' if is_wire else connector.get('connectorId')
+            if is_wire or is_net_label:
+                pin_id = 'common'
+            else:
+                pin_id = connector.get('connectorId')
 
             this_pin_ref = PinRef(
                 part_instance_id=instance_id,
@@ -123,7 +134,7 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
                 c2_part_inst = connect2.get('modelIndex')
                 c2_conn_id = connect2.get('connectorId')
 
-                if c2_part_inst in wire_instance_ids:
+                if c2_part_inst in connector_instance_ids:
                     c2_conn_id = 'common'
 
                 other_pin_ref = PinRef(part_instance_id=c2_part_inst, pin_id=c2_conn_id)
@@ -131,7 +142,35 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
                 # We add these always in a sorted order since they're non-directional
                 adjacencies.add(sort_adj(this_pin_ref, other_pin_ref))
 
-        if is_wire:
+        if is_net_label:
+            # Net labels are implicitly connected to all other net labels of the same name,
+            # so we create a virtual wire from the net label's common pin to a node based
+            # on the net name
+            # NB: There is a similar label in <title> but that will have a different int
+            # suffix for each instance of the same net label
+            net_name = instance.find("./property[@name='label']").get('value')  # TODO should I trim this?
+
+            net_node_instance_id = f"net_ref:{net_name}" 
+
+            schematic_pin_ref = PinRef(
+                part_instance_id=instance_id,
+                pin_id='common',
+            )
+            implicit_net_ref = PinRef(
+                part_instance_id=net_node_instance_id,
+                pin_id='common',
+            )
+
+            adjacencies.add(sort_adj(schematic_pin_ref, implicit_net_ref))
+
+            # Treat this as a wire too
+            connector_instance_ids.add(net_node_instance_id)
+
+            # Record the label for later
+            net_labels[net_node_instance_id] = net_name 
+
+
+        if is_wire or is_net_label:
             # Don't create a part instance for wires, we'll eliminate them later
             continue
 
@@ -183,17 +222,25 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             break
 
     for i, net in enumerate(sorted(nets)):
+        sorted_net = sorted(net)
         connections = [
             Connection(
                 part_instance=schematic.part_instances_by_id[p.part_instance_id],
                 pin_id=p.pin_id,
             )
-            for p in sorted(net)
-            if p.part_instance_id not in wire_instance_ids
+            for p in sorted_net
+            if p.part_instance_id not in connector_instance_ids
         ]
 
+        net_name = next(  # If there are multiple nets we just pick one
+            (net_labels[p.part_instance_id] for p in sorted_net if p.part_instance_id in net_labels),
+            None
+        )
+
+        print("Net name:", net_name)   # TODO debug
+
         node_id = f"node{i}"
-        schematic.nodes_by_id[node_id] = Node(node_id=node_id, connections=connections)
+        schematic.nodes_by_id[node_id] = Node(node_id=node_id, connections=connections, label=net_name)
 
     return schematic
 
@@ -201,15 +248,16 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
 def load_core_parts() -> PartsBin:
     parts_bin: PartsBin = {}
 
-    for filename in os.listdir(CORE_PARTS_DB_PATH):
-        if not filename.endswith(PART_EXTENSION):
-            continue
+    for dir_path in [FZ_RESOURCES_DB_PATH, CORE_PARTS_DB_PATH]:
+        for filename in os.listdir(dir_path):
+            if not filename.endswith(PART_EXTENSION):
+                continue
 
-        f = os.path.join(CORE_PARTS_DB_PATH, filename)
+            f = os.path.join(dir_path, filename)
 
-        with open(f, 'r') as fh:
-            part = parse_parts_file(fh)
-            parts_bin[part.part_id] = part
+            with open(f, 'r') as fh:
+                part = parse_part_file(fh)
+                parts_bin[part.part_id] = part
 
     return parts_bin
 
@@ -227,7 +275,7 @@ def parse_sketch(parts_bin: PartsBin, path: str) -> Schematic:
         # Parse any non-core parts included in the package
         for fzp_file in fzp_files:
             with zf.open(fzp_file) as fh:
-                part = parse_parts_file(fh)
+                part = parse_part_file(fh)
                 parts_bin[part.part_id] = part
 
         # Parse the schematic file

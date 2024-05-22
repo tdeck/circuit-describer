@@ -53,6 +53,7 @@ class Connection:
 @dataclass
 class Node:
     node_id: NodeID
+    label: Optional[str]
     connections: List[Connection]
 
 
