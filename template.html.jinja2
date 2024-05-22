@@ -28,19 +28,21 @@
 <table>
   <thead>
     <tr>
-      <th>Part</th><th>Count</th><th>Components</th>
+      <th>Components</th>
+      <th>Part</th>
+      <th>Part count</th>
     </tr>
   </thead>
   <tbody>
     {% for part in parts %}
       <tr>
-        <td>{{ part.part.short_name }}</td>
-        <td>{{ part.instances | length }}</td>
         <td>
           {% for inst in part.instances %}
             {{ inst.designator }}{% if not loop.last %}, {% endif %}
           {% endfor %}
         </td>
+        <td>{{ part.part.short_name }}</td>
+        <td>{{ part.instances | length }}</td>
       </tr>
     {% endfor %}
   </tbody>

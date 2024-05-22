@@ -237,8 +237,6 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             None
         )
 
-        print("Net name:", net_name)   # TODO debug
-
         node_id = f"node{i}"
         schematic.nodes_by_id[node_id] = Node(node_id=node_id, connections=connections, label=net_name)
 

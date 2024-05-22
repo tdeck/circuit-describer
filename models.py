@@ -30,7 +30,7 @@ class Part:
         if short_name.isnumeric():
             return f"{kind} {short_name}"  # e.g. "lead 0", "pin 0"
         else:
-            return f"the {short_name} {kind}"  # e.g. "the + lead", "the SCK / PB0 pin"
+            return f"{short_name} {kind}"  # e.g. "+ lead", "SCK / PB0 pin"
 
 
 @dataclass
