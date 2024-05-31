@@ -40,7 +40,8 @@ class PinRef:
 
 def clean_pin_name(name: str):
     name = name.strip()
-    name = re.sub(r'^pin(\d)', '\1', name, flags=re.IGNORECASE)
+    name = re.sub(r'^pin(\d)', r'\1', name, flags=re.IGNORECASE)
+    name = re.sub(r'^leg(\d)', r'\1', name, flags=re.IGNORECASE)
     name = re.sub(r'^pin ', '', name, flags=re.IGNORECASE)
     return name
 
@@ -258,9 +259,8 @@ def load_core_parts() -> PartsBin:
             f = os.path.join(dir_path, filename)
 
             with open(f, 'r') as fh:
-                print("Part", f)
+                # TODO debug print("Part", f)
                 part = parse_part_file(fh)
-                print("    got ID", part.part_id)
                 parts_bin[part.part_id] = part
 
     return parts_bin
