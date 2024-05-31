@@ -20,12 +20,14 @@ PartInstanceID is a fritzing modelIndex.
 PART_EXTENSION = '.fzp'
 WIRE_MODULE_ID = 'WireModuleID'
 NET_LABEL_MODULE_ID = 'NetLabelModuleID'
-SCHEMATIC_LAYERS = {'schematic', 'schematicTrace'}
+SCHEMATIC_LAYERS = {'schematic', 'schematicTrace', 'breadboardbreadboard'}
 
 # These resources are usually built into the binary by Qt so I had to get them from GitHub
 FZ_RESOURCES_DB_PATH = '/home/troy/Downloads/fritzing-app/resources/parts/core'
 # These are installed by Fritzing outside the resource bundle for some reason
 CORE_PARTS_DB_PATH = '/usr/share/fritzing/parts/core'
+# These are used in some online projects
+OBSOLETE_PARTS_DB_PATH = '/usr/share/fritzing/parts/obsolete'
 
 
 PartsBin = Dict[str, Part]
@@ -44,9 +46,11 @@ def clean_pin_name(name: str):
 
 
 def parse_part_file(fh: TextIOWrapper) -> Part:
-    module_tag = etree.parse(fh).getroot()
+    # Some of the old part files are malformed so I'm using the HTML parser to handle them
+    # The HTML parser inserts an <html> and <body> tag even if there are none
+    module_tag = etree.parse(fh, parser=etree.HTMLParser()).getroot().find('./body/module')
     
-    module_id = module_tag.get('moduleId')
+    module_id = module_tag.get('moduleid')  # HTML etree attr keys are lowercase
     short_name = module_tag.find('./title').text
 
     desc_tag = module_tag.find('./description')
@@ -246,7 +250,7 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
 def load_core_parts() -> PartsBin:
     parts_bin: PartsBin = {}
 
-    for dir_path in [FZ_RESOURCES_DB_PATH, CORE_PARTS_DB_PATH]:
+    for dir_path in [FZ_RESOURCES_DB_PATH, CORE_PARTS_DB_PATH, OBSOLETE_PARTS_DB_PATH]:
         for filename in os.listdir(dir_path):
             if not filename.endswith(PART_EXTENSION):
                 continue
@@ -254,7 +258,9 @@ def load_core_parts() -> PartsBin:
             f = os.path.join(dir_path, filename)
 
             with open(f, 'r') as fh:
+                print("Part", f)
                 part = parse_part_file(fh)
+                print("    got ID", part.part_id)
                 parts_bin[part.part_id] = part
 
     return parts_bin
