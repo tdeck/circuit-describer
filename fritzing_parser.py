@@ -20,7 +20,7 @@ PartInstanceID is a fritzing modelIndex.
 PART_EXTENSION = '.fzp'
 WIRE_MODULE_ID = 'WireModuleID'
 NET_LABEL_MODULE_ID = 'NetLabelModuleID'
-SCHEMATIC_LAYERS = {'schematic', 'schematicTrace', 'breadboardbreadboard'}
+SCHEMATIC_LAYERS = {'schematic', 'schematicTrace'}
 
 # These resources are usually built into the binary by Qt so I had to get them from GitHub
 FZ_RESOURCES_DB_PATH = '/home/troy/Downloads/fritzing-app/resources/parts/core'
@@ -123,6 +123,9 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
 
         # Find all the connections and put them in the adjacency list
         for connector in schematic_view.findall('./connectors/connector'):
+            if connector.get('layer') not in SCHEMATIC_LAYERS:
+                continue # TODO test
+
             # Treat all endpoints of a wire as the same node so they end up adjacent
             if is_wire or is_net_label:
                 pin_id = 'common'
@@ -135,6 +138,9 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             )
 
             for connect2 in connector.findall('./connects/connect'):
+                if connect2.get('layer') not in SCHEMATIC_LAYERS:
+                    continue # TODO test
+
                 has_connection = True
                 c2_part_inst = connect2.get('modelIndex')
                 c2_conn_id = connect2.get('connectorId')
