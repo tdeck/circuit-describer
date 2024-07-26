@@ -1,4 +1,5 @@
 from collections import Counter
+import dataclasses
 from io import TextIOWrapper
 from pprint import pprint
 from typing import Dict, Set, Tuple
@@ -34,7 +35,7 @@ OBSOLETE_PARTS_DB_PATH = '/usr/share/fritzing/parts/obsolete'
 # description, and instead can be manually parameterized in the UI.
 # For more on how this works see this forum post:
 # https://forum.fritzing.org/t/properties-for-custom-parts/14641/2
-FACTORY_PART_MODULE_IDS = {
+FACTORY_PART_MODULE_ID_SUFFIXES = {
     'ResistorModuleID',
     'CapacitorModuleID',
     'CrystalModuleID',
@@ -54,7 +55,7 @@ FACTORY_PART_MODULE_IDS = {
     'BlockerModuleID',
 }
 
-@dataclass(kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class FzPart(Part):
     display_properties: List[str]   # Props with showInLabel in part definition; in order
 
@@ -64,6 +65,10 @@ PartsBin = Dict[str, FzPart]
 class PinRef:
     part_instance_id: PartInstanceID
     pin_id: PinID
+
+def is_factory_part(module_id: str) -> bool:
+    # TODO this is slow; use something more optimal
+    return any((module_id.endswith(s) for s in FACTORY_PART_MODULE_ID_SUFFIXES))
 
 def create_factory_part_id(
     module_id: str,
@@ -81,10 +86,9 @@ def create_factory_part(
     module_id: str,
     props: Dict[str, str]
 ) -> Part:
-    print("THD create_factory_part", module_id) # TODO debug
     parent_part = parts_bin[module_id]
 
-    parenthetical_props = ','.join([
+    parenthetical_props = ', '.join([
         props[dp] for dp in parent_part.display_properties
     ])
     new_short_name = parent_part.short_name + ' (' + parenthetical_props + ')'
@@ -98,7 +102,7 @@ def create_factory_part(
 
     # For now I'm assuming the factory settings don't affect the number of pins
     # TODO verify this
-    return part
+    return new_part
 
 
 def clean_pin_name(name: str):
@@ -126,7 +130,7 @@ def parse_part_file(fh: TextIOWrapper) -> FzPart:
     designator_prefix = 'U' if label_tag is None else label_tag.text
 
     display_properties = [
-        p.get('name')
+        p.get('name').lower() # These should be case insensitive
         for p in module_tag.findall("./properties/property[@showinlabel='yes']")
     ]
 
@@ -224,7 +228,7 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
 
         # Extract the property key-value pairs
         properties: Dict[str, str] = {
-            prop_tag.get('name'): prop_tag.get('value')
+            prop_tag.get('name').lower(): prop_tag.get('value')
             for prop_tag in instance.findall("./property") or []
         }
 
@@ -260,10 +264,9 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             # Don't create a part instance for wires, we'll eliminate them later
             continue
 
-        if module_id_ref in FACTORY_PART_MODULE_IDS:
+        if is_factory_part(module_id_ref):
             part = create_factory_part(parts_bin, module_id_ref, properties)
         else:
-            print("Part not in factory list:", module_id_ref) # TODO debug
             part = parts_bin[module_id_ref]
 
         designator_counts[part.designator_prefix] += 1
@@ -345,7 +348,6 @@ def load_core_parts() -> PartsBin:
             f = os.path.join(dir_path, filename)
 
             with open(f, 'r') as fh:
-                # TODO debug print("Part", f)
                 part = parse_part_file(fh)
                 parts_bin[part.part_id] = part
 
