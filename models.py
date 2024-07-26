@@ -15,12 +15,13 @@ class PartPin:
     description: Optional[str]
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Part:
     part_id: PartID
     short_name: str
     description: Optional[str]
     designator_prefix: str
+    # TODO properties: Dict[str, str] # Relevant key-value properties like resistance, capacitance, package, etc...
     pins: Dict[PinID, PartPin]
 
     def pin_reference(self, pin_id: PinID) -> str:
@@ -39,6 +40,7 @@ class PartInstance:
     part_instance_id: PartInstanceID
     designator: str  # e.g. C1
     part: Part
+    # TODO instance specific label when relevant
 
     def __lt__(self, other):
         return self.part_instance_id < other.part_instance_id

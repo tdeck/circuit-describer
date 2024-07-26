@@ -30,12 +30,75 @@ CORE_PARTS_DB_PATH = '/usr/share/fritzing/parts/core'
 OBSOLETE_PARTS_DB_PATH = '/usr/share/fritzing/parts/obsolete'
 
 
-PartsBin = Dict[str, Part]
+# These are module IDs for core parts that aren't fully specified by their part bin
+# description, and instead can be manually parameterized in the UI.
+# For more on how this works see this forum post:
+# https://forum.fritzing.org/t/properties-for-custom-parts/14641/2
+FACTORY_PART_MODULE_IDS = {
+    'ResistorModuleID',
+    'CapacitorModuleID',
+    'CrystalModuleID',
+    'ThermistorModuleID',
+    'ZenerDiodeModuleID',
+    'PotentiometerModuleID',
+    'InductorModuleID',
+    '2PowerModuleID',
+    'ColorLEDModuleID',
+    'LEDSuperfluxModuleID',
+    'LEDModuleID',
+    'PerfboardModuleID',
+    'StripboardModuleID',
+    'Stripboard2ModuleID',
+    'SchematicFrameModuleID',
+    'PadModuleID',
+    'BlockerModuleID',
+}
+
+@dataclass(kw_only=True)
+class FzPart(Part):
+    display_properties: List[str]   # Props with showInLabel in part definition; in order
+
+PartsBin = Dict[str, FzPart]
 
 @dataclass(frozen=True, order=True)
 class PinRef:
     part_instance_id: PartInstanceID
     pin_id: PinID
+
+def create_factory_part_id(
+    module_id: str,
+    props: Dict[str, str]
+) -> PartID:
+    kv_str = ';'.join([
+        f"{k}={props[k]}"
+        for k in sorted(props.keys())
+        if k != 'family' # Family key is a generic category and is redundant
+    ])
+    return f"{module_id}:{kv_str}"
+
+def create_factory_part(
+    parts_bin: PartsBin,
+    module_id: str,
+    props: Dict[str, str]
+) -> Part:
+    print("THD create_factory_part", module_id) # TODO debug
+    parent_part = parts_bin[module_id]
+
+    parenthetical_props = ','.join([
+        props[dp] for dp in parent_part.display_properties
+    ])
+    new_short_name = parent_part.short_name + ' (' + parenthetical_props + ')'
+
+    # TODO should I do something to the description?
+    new_part = dataclasses.replace(
+        parts_bin[module_id],
+        short_name=new_short_name,
+        part_id=create_factory_part_id(module_id, props)
+    )
+
+    # For now I'm assuming the factory settings don't affect the number of pins
+    # TODO verify this
+    return part
 
 
 def clean_pin_name(name: str):
@@ -46,11 +109,11 @@ def clean_pin_name(name: str):
     return name
 
 
-def parse_part_file(fh: TextIOWrapper) -> Part:
+def parse_part_file(fh: TextIOWrapper) -> FzPart:
     # Some of the old part files are malformed so I'm using the HTML parser to handle them
     # The HTML parser inserts an <html> and <body> tag even if there are none
     module_tag = etree.parse(fh, parser=etree.HTMLParser()).getroot().find('./body/module')
-    
+
     module_id = module_tag.get('moduleid')  # HTML etree attr keys are lowercase
     short_name = module_tag.find('./title').text
 
@@ -61,6 +124,11 @@ def parse_part_file(fh: TextIOWrapper) -> Part:
 
     label_tag = module_tag.find('./label')
     designator_prefix = 'U' if label_tag is None else label_tag.text
+
+    display_properties = [
+        p.get('name')
+        for p in module_tag.findall("./properties/property[@showinlabel='yes']")
+    ]
 
     pins: Dict[PinID, PartPin] = {}
 
@@ -75,12 +143,13 @@ def parse_part_file(fh: TextIOWrapper) -> Part:
 
         pins[pid] = PartPin(pin_id=pid, short_name=pin_short_name, description=pin_desc)
 
-    return Part(
+    return FzPart(
         part_id=module_id,
         short_name=short_name,
         description=description,
         pins=pins,
-        designator_prefix=designator_prefix
+        designator_prefix=designator_prefix,
+        display_properties=display_properties,
     )
 
 
@@ -102,7 +171,7 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             xml_doc.findall(f"./instances/instance")
             if e.get('moduleIdRef') in [NET_LABEL_MODULE_ID, WIRE_MODULE_ID]
     ])
-    net_labels: Dict[str, str] = {}  # Maps net label node instance IDs to 
+    net_labels: Dict[str, str] = {}  # Maps net label node instance IDs to the net's name
 
     schematic = Schematic()
     adjacencies: Set[Tuple[PinRef, PinRef]] = set()
@@ -153,15 +222,21 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
                 # We add these always in a sorted order since they're non-directional
                 adjacencies.add(sort_adj(this_pin_ref, other_pin_ref))
 
+        # Extract the property key-value pairs
+        properties: Dict[str, str] = {
+            prop_tag.get('name'): prop_tag.get('value')
+            for prop_tag in instance.findall("./property") or []
+        }
+
         if is_net_label:
             # Net labels are implicitly connected to all other net labels of the same name,
             # so we create a virtual wire from the net label's common pin to a node based
             # on the net name
             # NB: There is a similar label in <title> but that will have a different int
             # suffix for each instance of the same net label
-            net_name = instance.find("./property[@name='label']").get('value')  # TODO should I trim this?
+            net_name = properties['label'] # TODO should I trim this?
 
-            net_node_instance_id = f"net_ref:{net_name}" 
+            net_node_instance_id = f"net_ref:{net_name}"
 
             schematic_pin_ref = PinRef(
                 part_instance_id=instance_id,
@@ -178,18 +253,23 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             connector_instance_ids.add(net_node_instance_id)
 
             # Record the label for later
-            net_labels[net_node_instance_id] = net_name 
+            net_labels[net_node_instance_id] = net_name
 
 
         if is_wire or is_net_label:
             # Don't create a part instance for wires, we'll eliminate them later
             continue
 
-        part = parts_bin[module_id_ref]
+        if module_id_ref in FACTORY_PART_MODULE_IDS:
+            part = create_factory_part(parts_bin, module_id_ref, properties)
+        else:
+            print("Part not in factory list:", module_id_ref) # TODO debug
+            part = parts_bin[module_id_ref]
+
         designator_counts[part.designator_prefix] += 1
 
         part_instance = PartInstance(
-            part_instance_id=instance_id, 
+            part_instance_id=instance_id,
             part=part,
             designator=part.designator_prefix + str(designator_counts[part.designator_prefix])
         )
