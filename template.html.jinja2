@@ -58,24 +58,26 @@ All points in a row of the nets table are connected by wires.
   <h3>{{ part.part.short_name }}</h3>
   <pre>{{ part.part.description }}</pre>
 
-  <h4>Pin descriptions</h4>
-  <table>
-    <thead>
-      <tr>
-        <th>Pin</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for pin in part.part.pins.values() %}
-        {% if pin.description %}
-          <tr>
-            <td>{{ pin.short_name }}</td>
-            <td>{{ pin.description }}</td>
-          </tr>
-        {% endif %}
-      {% endfor %}
-    </tbody>
-  </table>
+  {% if part.part.pins|length > 2 %}
+    <h4>Pin descriptions</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>Pin</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pin in part.part.pins.values() %}
+          {% if pin.description %}
+            <tr>
+              <td>{{ pin.short_name }}</td>
+              <td>{{ pin.description }}</td>
+            </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
 {% endfor %}
 
