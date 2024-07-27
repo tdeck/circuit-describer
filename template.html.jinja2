@@ -13,7 +13,7 @@
       <tr>
         <td>
           {% for inst in part.instances %}
-            {{ inst.designator }}{% if not loop.last %}, {% endif %}
+            <span id="bom-{{inst.designator}}">{{ inst.designator }}</span>{% if not loop.last %}, {% endif %}
           {% endfor %}
         </td>
         <td><a href="#desc-{{ part.part.part_id|urlencode }}">{{ part.part.short_name }}</a></td>
@@ -44,7 +44,7 @@ All points in a row of the nets table are connected by wires.
         <td>
           <ul>
             {% for conn in net.connections %}
-              <li>{{ conn.part_instance.designator }} {{ conn.part_instance.part.pin_reference(conn.pin_id) }}</li>
+              <li><a href="#bom-{{conn.part_instance.designator}}">{{ conn.part_instance.designator }}</a> {{ conn.part_instance.part.pin_reference(conn.pin_id) }}</li>
             {% endfor %}
           </ul>
         </td>
