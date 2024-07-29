@@ -2,7 +2,7 @@ from collections import Counter
 import dataclasses
 from io import TextIOWrapper
 from pprint import pprint
-from typing import Dict, Set, Tuple
+from typing import Dict, Set, Tuple, Optional
 from zipfile import ZipFile
 import os
 import re
@@ -55,6 +55,11 @@ FACTORY_PART_MODULE_ID_SUFFIXES = {
     'BlockerModuleID',
 }
 
+# Some parts have an unsuitable long description (e.g. capacitors say they're all 1000uf).
+FACTORY_PART_LONG_DESCRIPTION_OVERRIDES = {
+    'CapacitorModuleID': 'A generic capacitor',
+}
+
 @dataclasses.dataclass(kw_only=True)
 class FzPart(Part):
     display_properties: List[str]   # Props with showInLabel in part definition; in order
@@ -69,6 +74,12 @@ class PinRef:
 def is_factory_part(module_id: str) -> bool:
     # TODO this is slow; use something more optimal
     return any((module_id.endswith(s) for s in FACTORY_PART_MODULE_ID_SUFFIXES))
+
+def get_factory_part_override_desc(module_id: str) -> Optional[str]:
+    return next(
+        (v for k, v in FACTORY_PART_LONG_DESCRIPTION_OVERRIDES.items() if module_id.endswith(k)),
+        None  # Default
+    )
 
 def create_factory_part_id(
     module_id: str,
@@ -93,10 +104,13 @@ def create_factory_part(
     ])
     new_short_name = parent_part.short_name + ' (' + parenthetical_props + ')'
 
+    desc = get_factory_part_override_desc(module_id) or parent_part.description
+
     # TODO should I do something to the description?
     new_part = dataclasses.replace(
         parts_bin[module_id],
         short_name=new_short_name,
+        description=desc,
         part_id=create_factory_part_id(module_id, props)
     )
 
