@@ -58,7 +58,7 @@ All points in a row of the nets table are connected by wires.
   <h3 id="desc-{{part.part.part_id|urlencode}}">{{ part.part.short_name }}</h3>
   <pre>{{ part.part.description }}</pre>
 
-  {% if part.part.pins|length > 2 %}
+  {% if part.part.should_show_pin_descriptions() %}
     <h4>Pin descriptions</h4>
     <table>
       <thead>

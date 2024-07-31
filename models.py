@@ -31,7 +31,23 @@ class Part:
         if short_name.isnumeric():
             return f"{kind} {short_name}"  # e.g. "lead 0", "pin 0"
         else:
-            return f"{short_name} {kind}"  # e.g. "+ lead", "SCK / PB0 pin"
+            return f"{short_name} {kind}"  # e.g. "+ lead", "SCK / PB0 pin"p.short_name 
+
+    def should_show_pin_descriptions(self):
+        # Don't show a table for just a couple of pins
+        if len(self.pins) < 3:
+            return False
+
+        # Don't show the table if all pins' names are the same as the pin descriptions
+        if all((p.description is None or p.short_name.lower() == p.description.lower() for p in self.pins.values())):
+            return False
+
+        # Don't show the table if all pin descriptions are the same
+        first_pin = next(iter(self.pins.values()))
+        if all((first_pin.description == p.description for p in self.pins.values())):
+            return False
+
+        return True
 
 
 @dataclass
