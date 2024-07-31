@@ -68,6 +68,12 @@ FACTORY_PART_LONG_DESCRIPTION_OVERRIDES = {
 # does not have showInLabel=true for these props; all lowercase
 PROPERTIES_TO_ALWAYS_DISPLAY = {'voltage'}
 
+PROPERTY_UNITS = {
+    'voltage': 'V',
+    'resistance': chr(937), # Fritzing uses &#937; (Greek capital letter omega) rather than &#8486; (ohm sign) and we don't want to double up
+    'power': 'W',
+}
+
 @dataclasses.dataclass(kw_only=True)
 class FzPart(Part):
     display_properties: List[str]   # Props with showInLabel in part definition; in order; all lowercase
@@ -103,11 +109,9 @@ def create_factory_part_id(
 def format_prop(prop_key: str, props: Dict[str, str]) -> str:
     val = props[prop_key]
 
-    if prop_key == 'voltage' and val != "" and not val.upper().endswith('V'):
-        # Fritzing *does* have a special case for properties called 'voltage' to make them editable,
-        # (in SymbolPaletteItem) but doesn't assign units to them. Since this is such a common
-        # property and we want it to be as readable as possible, we append a unit if there isn't one
-        val += 'V'
+    unit = PROPERTY_UNITS.get(prop_key)
+    if val != "" and unit and not val.upper().endswith(unit):
+        val += unit
 
     return val
 
