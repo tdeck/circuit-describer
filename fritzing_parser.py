@@ -103,7 +103,7 @@ def create_factory_part_id(
 def format_prop(prop_key: str, props: Dict[str, str]) -> str:
     val = props[prop_key]
 
-    if prop_key == 'voltage' and not val.upper().endswith('V'):
+    if prop_key == 'voltage' and val != "" and not val.upper().endswith('V'):
         # Fritzing *does* have a special case for properties called 'voltage' to make them editable,
         # (in SymbolPaletteItem) but doesn't assign units to them. Since this is such a common
         # property and we want it to be as readable as possible, we append a unit if there isn't one
