@@ -59,7 +59,6 @@ FACTORY_PART_MODULE_ID_SUFFIXES = {
 }
 
 # Some parts have an unsuitable long description (e.g. capacitors say they're all 1000uf).
-# The part's properties will be passed in as the 'props' dict for a string.format() call
 FACTORY_PART_LONG_DESCRIPTION_OVERRIDES = {
     'CapacitorModuleID': 'A generic capacitor',
 }
