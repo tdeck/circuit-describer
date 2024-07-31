@@ -53,16 +53,24 @@ FACTORY_PART_MODULE_ID_SUFFIXES = {
     'SchematicFrameModuleID',
     'PadModuleID',
     'BlockerModuleID',
+    # These below aren't technically factory parts in the Fz codebase, but they get parameterized
+    # so we need to treat them that way
+    'PowerLabelModuleID',
 }
 
 # Some parts have an unsuitable long description (e.g. capacitors say they're all 1000uf).
+# The part's properties will be passed in as the 'props' dict for a string.format() call
 FACTORY_PART_LONG_DESCRIPTION_OVERRIDES = {
     'CapacitorModuleID': 'A generic capacitor',
 }
 
+# This is a list of properties to show in the description of a part even if the part
+# does not have showInLabel=true for these props; all lowercase
+PROPERTIES_TO_ALWAYS_DISPLAY = {'voltage'}
+
 @dataclasses.dataclass(kw_only=True)
 class FzPart(Part):
-    display_properties: List[str]   # Props with showInLabel in part definition; in order
+    display_properties: List[str]   # Props with showInLabel in part definition; in order; all lowercase
 
 PartsBin = Dict[str, FzPart]
 
@@ -92,6 +100,18 @@ def create_factory_part_id(
     ])
     return f"{module_id}:{kv_str}"
 
+def format_prop(prop_key: str, props: Dict[str, str]) -> str:
+    val = props[prop_key]
+
+    if prop_key == 'voltage' and not val.upper().endswith('V'):
+        # Fritzing *does* have a special case for properties called 'voltage' to make them editable,
+        # (in SymbolPaletteItem) but doesn't assign units to them. Since this is such a common
+        # property and we want it to be as readable as possible, we append a unit if there isn't one
+        val += 'V'
+
+    return val
+
+
 def create_factory_part(
     parts_bin: PartsBin,
     module_id: str,
@@ -100,9 +120,14 @@ def create_factory_part(
     parent_part = parts_bin[module_id]
 
     parenthetical_props = ', '.join([
-        props[dp] for dp in parent_part.display_properties
+        f"{dp} {format_prop(dp, props)}" for dp in parent_part.display_properties
+            if props[dp] != ""
     ])
-    new_short_name = parent_part.short_name + ' (' + parenthetical_props + ')'
+
+    if parenthetical_props:
+        new_short_name = parent_part.short_name + ' (' + parenthetical_props + ')'
+    else:
+        new_short_name = parent_part.short_name
 
     desc = get_factory_part_override_desc(module_id) or parent_part.description
 
@@ -145,7 +170,9 @@ def parse_part_file(fh: TextIOWrapper) -> FzPart:
 
     display_properties = [
         p.get('name').lower() # These should be case insensitive
-        for p in module_tag.findall("./properties/property[@showinlabel='yes']")
+        for p in module_tag.findall("./properties/property")
+            if p.get("showinlabel") == "yes"
+                or p.get("name").lower() in PROPERTIES_TO_ALWAYS_DISPLAY
     ]
 
     pins: Dict[PinID, PartPin] = {}
