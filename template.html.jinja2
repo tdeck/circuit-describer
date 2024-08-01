@@ -39,8 +39,10 @@ All points in a row of the nets table are connected by wires.
             {% if net.label %}
                 {{ net.label }} 
             {% else %}
-                Net {{ loop.index }}</td>
+                Net {{ loop.index }}
             {% endif %}
+            <input type="checkbox">
+        </td>
         <td>
           <ul>
             {% for conn in net.connections %}
