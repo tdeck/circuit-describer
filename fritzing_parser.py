@@ -75,6 +75,7 @@ PROPERTY_UNITS = {
 
 @dataclasses.dataclass(kw_only=True)
 class FzPart(Part):
+    properties: Dict[str, str]
     display_properties: List[str]   # Props with showInLabel in part definition; in order; all lowercase
 
 PartsBin = Dict[str, FzPart]
@@ -122,9 +123,13 @@ def create_factory_part(
 ) -> Part:
     parent_part = parts_bin[module_id]
 
+    # Merge parent and child properties
+    new_props = dict(parent_part.properties)
+    new_props.update(props)
+
     parenthetical_props = ', '.join([
-        f"{dp} {format_prop(dp, props)}" for dp in parent_part.display_properties
-            if props[dp] != ""
+        f"{dp} {format_prop(dp, new_props)}" for dp in parent_part.display_properties
+            if new_props[dp] != ""
     ])
 
     if parenthetical_props:
@@ -139,7 +144,8 @@ def create_factory_part(
         parts_bin[module_id],
         short_name=new_short_name,
         description=desc,
-        part_id=create_factory_part_id(module_id, props)
+        part_id=create_factory_part_id(module_id, new_props),
+        properties=new_props,
     )
 
     # For now I'm assuming the factory settings don't affect the number of pins
@@ -171,9 +177,14 @@ def parse_part_file(fh: TextIOWrapper) -> FzPart:
     label_tag = module_tag.find('./label')
     designator_prefix = 'U' if label_tag is None else label_tag.text
 
+    property_tags = module_tag.findall("./properties/property")
+    properties = {
+        p.get('name').lower(): p.text for p in property_tags
+    }
+
     display_properties = [
         p.get('name').lower() # These should be case insensitive
-        for p in module_tag.findall("./properties/property")
+        for p in property_tags
             if p.get("showinlabel") == "yes"
                 or p.get("name").lower() in PROPERTIES_TO_ALWAYS_DISPLAY
     ]
@@ -197,6 +208,7 @@ def parse_part_file(fh: TextIOWrapper) -> FzPart:
         description=description,
         pins=pins,
         designator_prefix=designator_prefix,
+        properties=properties,
         display_properties=display_properties,
     )
 
