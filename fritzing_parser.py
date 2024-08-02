@@ -6,6 +6,7 @@ from typing import Dict, Set, Tuple, Optional
 from zipfile import ZipFile
 import os
 import re
+import sys
 
 from lxml import etree
 from inscriptis import get_text as html_to_text
@@ -71,6 +72,7 @@ PROPERTY_UNITS = {
     'voltage': 'V',
     'resistance': chr(937), # Fritzing uses &#937; (Greek capital letter omega) rather than &#8486; (ohm sign) and we don't want to double up
     'power': 'W',
+    'current': 'A',
 }
 
 @dataclasses.dataclass(kw_only=True)
@@ -129,7 +131,7 @@ def create_factory_part(
 
     parenthetical_props = ', '.join([
         f"{dp} {format_prop(dp, new_props)}" for dp in parent_part.display_properties
-            if new_props[dp] != ""
+            if new_props[dp] # Ignore empty string or null props
     ])
 
     if parenthetical_props:
@@ -243,7 +245,7 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
         is_wire = module_id_ref == WIRE_MODULE_ID
 
         schematic_view = instance.find('./views/schematicView')
-        if not schematic_view or schematic_view.get('layer') not in SCHEMATIC_LAYERS:  # This could be a PCB or breadboard-only symbol
+        if schematic_view is None or schematic_view.get('layer') not in SCHEMATIC_LAYERS:  # This could be a PCB or breadboard-only symbol
             continue
 
         instance_id = instance.get('modelIndex')
