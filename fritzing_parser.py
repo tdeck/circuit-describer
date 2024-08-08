@@ -2,7 +2,7 @@ from collections import Counter
 import dataclasses
 from io import TextIOWrapper
 from pprint import pprint
-from typing import Dict, Set, Tuple, Optional
+from typing import Dict, Set, Tuple, Optional, TypeVar, Generic
 from zipfile import ZipFile
 import os
 import re
@@ -32,11 +32,48 @@ CORE_PARTS_DB_PATH = '/usr/share/fritzing/parts/core'
 OBSOLETE_PARTS_DB_PATH = '/usr/share/fritzing/parts/obsolete'
 
 
+T = TypeVar('T')
+class SuffixMatcher(Generic[T]):
+    """
+    A data structure storing entries of an arbitrary type and allowing you to search by module ID for
+    the entry whose key is the longest suffix match to the module ID.
+    """
+
+    _entries: List[Tuple[str, T]]
+
+    def __init__(self, elems: Dict[str, T]):
+        keys = list(elems.keys())
+
+        # Make longest prefix match first
+        keys.sort(key=lambda k: len(k), reverse=True)
+
+        self._entries = [(k, elems[k]) for k in keys]
+
+    def lookup(self, module_id: str, default: T):
+        # TODO use a trie or something to make this more efficient
+        for k, v in self._entries:
+            if k[0] == '^' and k[1:] == module_id:  # Special syntax for exact match
+                return v
+
+            if module_id.endswith(k):
+                return v
+        return default
+
+
+class SuffixSet(SuffixMatcher[bool]):
+    def __init__(self, *elems: List[str]):
+        super().__init__({k: True for k in elems})
+
+    def has(self, module_id: str) -> bool:
+        return self.lookup(module_id, False)
+
+
+
 # These are module IDs for core parts that aren't fully specified by their part bin
 # description, and instead can be manually parameterized in the UI.
 # For more on how this works see this forum post:
 # https://forum.fritzing.org/t/properties-for-custom-parts/14641/2
-FACTORY_PART_MODULE_ID_SUFFIXES = {
+FACTORY_PART_MODULE_ID_SUFFIXES = SuffixSet(
     'ResistorModuleID',
     'CapacitorModuleID',
     'CrystalModuleID',
@@ -57,12 +94,17 @@ FACTORY_PART_MODULE_ID_SUFFIXES = {
     # These below aren't technically factory parts in the Fz codebase, but they get parameterized
     # so we need to treat them that way
     'PowerLabelModuleID',
-}
+)
+
+# Some parts have an unsuitable title (e.g. resistors say they're all 220 ohms).
+FACTORY_PART_TITLE_OVERRIDES = SuffixMatcher({
+    'ResistorModuleID': 'Resistor',
+})
 
 # Some parts have an unsuitable long description (e.g. capacitors say they're all 1000uf).
-FACTORY_PART_LONG_DESCRIPTION_OVERRIDES = {
+FACTORY_PART_LONG_DESCRIPTION_OVERRIDES = SuffixMatcher({
     'CapacitorModuleID': 'A generic capacitor',
-}
+})
 
 # This is a list of properties to show in the description of a part even if the part
 # does not have showInLabel=true for these props; all lowercase
@@ -86,16 +128,6 @@ PartsBin = Dict[str, FzPart]
 class PinRef:
     part_instance_id: PartInstanceID
     pin_id: PinID
-
-def is_factory_part(module_id: str) -> bool:
-    # TODO this is slow; use something more optimal
-    return any((module_id.endswith(s) for s in FACTORY_PART_MODULE_ID_SUFFIXES))
-
-def get_factory_part_override_desc(module_id: str) -> Optional[str]:
-    return next(
-        (v for k, v in FACTORY_PART_LONG_DESCRIPTION_OVERRIDES.items() if module_id.endswith(k)),
-        None  # Default
-    )
 
 def create_factory_part_id(
     module_id: str,
@@ -139,13 +171,12 @@ def create_factory_part(
     else:
         new_short_name = parent_part.short_name
 
-    desc = get_factory_part_override_desc(module_id) or parent_part.description
+    desc = FACTORY_PART_LONG_DESCRIPTION_OVERRIDES.lookup(module_id, parent_part.description)
 
-    # TODO should I do something to the description?
     new_part = dataclasses.replace(
         parts_bin[module_id],
         short_name=new_short_name,
-        description=desc,
+        description=FACTORY_PART_LONG_DESCRIPTION_OVERRIDES.lookup(module_id, parent_part.description),
         part_id=create_factory_part_id(module_id, new_props),
         properties=new_props,
     )
@@ -322,7 +353,7 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             # Don't create a part instance for wires, we'll eliminate them later
             continue
 
-        if is_factory_part(module_id_ref):
+        if FACTORY_PART_MODULE_ID_SUFFIXES.has(module_id_ref):
             part = create_factory_part(parts_bin, module_id_ref, properties)
         else:
             part = parts_bin[module_id_ref]
