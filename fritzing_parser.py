@@ -425,6 +425,13 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             if p.part_instance_id not in connector_instance_ids
         ]
 
+        if not connections:
+            # This can happen if all the parts are connectors.
+            # They won't be merged into another net if all the things they
+            # connect to are in non-schematic layers (e.g. intermediate BB
+            # buses that make the breadboard look nicer)
+            continue
+
         net_name = next(  # If there are multiple nets we just pick one
             (net_labels[p.part_instance_id] for p in sorted_net if p.part_instance_id in net_labels),
             None
