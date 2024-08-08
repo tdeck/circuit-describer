@@ -166,10 +166,10 @@ def create_factory_part(
             if new_props[dp] # Ignore empty string or null props
     ])
 
+    new_short_name = FACTORY_PART_TITLE_OVERRIDES.lookup(module_id, parent_part.short_name)
+
     if parenthetical_props:
-        new_short_name = parent_part.short_name + ' (' + parenthetical_props + ')'
-    else:
-        new_short_name = parent_part.short_name
+        new_short_name += ' (' + parenthetical_props + ')'
 
     desc = FACTORY_PART_LONG_DESCRIPTION_OVERRIDES.lookup(module_id, parent_part.description)
 
