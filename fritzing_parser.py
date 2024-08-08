@@ -99,11 +99,21 @@ FACTORY_PART_MODULE_ID_SUFFIXES = SuffixSet(
 # Some parts have an unsuitable title (e.g. resistors say they're all 220 ohms).
 FACTORY_PART_TITLE_OVERRIDES = SuffixMatcher({
     'ResistorModuleID': 'Resistor',
+
+    # These are all titled "Blue smd LED" even though the color is customizable :/
+    '^1206ColorLEDModuleID': 'SMD LED',
+    '^603ColorLEDModuleID': 'SMD LED',
+    '^805ColorLEDModuleID': 'SMD LED',
+
+    # These are titled "Red LED" despite the possibility to change color
+    '^5mmColorLEDModuleID': 'LED - 5mm',
+    '^3mmColorLEDModuleID': 'LED - 3mm',
 })
 
 # Some parts have an unsuitable long description (e.g. capacitors say they're all 1000uf).
 FACTORY_PART_LONG_DESCRIPTION_OVERRIDES = SuffixMatcher({
     'CapacitorModuleID': 'A generic capacitor',
+    'ColorLEDModuleID': 'A generic LED (~1.8V)',
 })
 
 # This is a list of properties to show in the description of a part even if the part
