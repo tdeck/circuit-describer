@@ -1,15 +1,17 @@
 from dataclasses import dataclass
 from typing import List, Dict
 
-from lxml import etree
-import requests
+from selenium import webdriver
+from selenium.webdriver.common.by import By
 
-from config import HEADERS # This file will not be checked in; needs uagent and cookie
-
+@dataclass
 class ProjectListing:
     title: str
+    tagline: str  # Not sure what this is really called
     description_html: str
-    difficulty: str  # kids, amateurs, masters, fritzmasters
+    creator: str
+    #difficulty: str  # kids, amateurs, masters, fritzmasters
+    license_url: str
     image_urls: List[str]
     download_urls: Dict[str, str]  # Filename -> URL
 
@@ -21,12 +23,27 @@ ALLOWED_LICENSES = {
 FIRST_PAGE = 1
 LAST_PAGE = 5 # TODO
 
-def scrape_listing_page(url):
-    body = requests.get(url, headers=HEADERS).content
-    print(body)
-    root = etree.fromstring(body, parser=etree.HTMLParser())
-    print("Root", root)
-    content_div = root.xpath("//*[@id='content']")
-    print("CD", content_div)
 
-scrape_listing_page('https://fritzing.org/projects/arduino-bipolar-stepper-motor-controller')
+def scrape_single_project(driver, url: str): # TODO driver type
+    driver.get(url)
+
+    image_urls = [a.get_attribute('href') for a in driver.find_elements(By.CSS_SELECTOR, '.thumb-gallery > li > a')]
+    download_urls = {
+        a.get_attribute('innerText'): a.get_attribute('href') 
+        for a in driver.find_elements(By.CSS_SELECTOR, '.highlight li > a')
+    }
+
+    return ProjectListing(
+        title=driver.title,
+        tagline=driver.find_element(By.CLASS_NAME, 'lead').get_attribute('innerText'),
+        description_html=driver.find_element(By.CSS_SELECTOR, '#content div.row:nth-child(4) > div:nth-child(1)').get_attribute('innerHTML'),
+        creator=driver.find_element(By.CSS_SELECTOR, '.meta > h3:nth-child(1) > a:nth-child(1)').get_attribute('innerText'),
+        license_url=driver.find_element(By.CSS_SELECTOR, '.license > a').get_attribute('href'),
+        image_urls=image_urls,
+        download_urls=download_urls,
+    )
+
+
+with webdriver.Firefox() as driver:
+    print(scrape_single_project(driver, 'https://fritzing.org/projects/arduino-bipolar-stepper-motor-controller'))
+    #print(scrape_single_project(driver, 'https://fritzing.org/projects/serial-voice'))
