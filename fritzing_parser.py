@@ -460,6 +460,7 @@ def load_core_parts() -> PartsBin:
     return parts_bin
 
 
+# TODO make this take in a file handle?
 def parse_sketch(parts_bin: PartsBin, path: str) -> Schematic:
     # Note: parts_bin gets mutated; I think that's OK for this use case
 
