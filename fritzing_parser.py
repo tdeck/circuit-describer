@@ -85,6 +85,9 @@ class TemplatedPartFamily:
     # property name, since group names can't contain spaces.
     id_match_pattern: str
 
+    def matches(self, module_id: str):
+        return re.compile(self.id_match_pattern).match(module_id)
+
 # These are module IDs for core parts that aren't fully specified by their part bin
 # description, and instead can be manually parameterized in the UI.
 # For more on how this works see this forum post:
@@ -140,22 +143,24 @@ FACTORY_PART_LONG_DESCRIPTION_OVERRIDES = SuffixMatcher({
 # metadata and the number of pins, so we make our own stripped down descriptions on the
 # fly too.
 # Important: There must be a value for "pins" for each of these!
-TEMPLATED_PART_FAMILIES = {
-    'screw terminal': TemplatedPartFamily(
+TEMPLATED_PART_FAMILIES = [
+    TemplatedPartFamily(
+        # Family: "screw terminal"
         title='Screw terminal',
         desc='Generic screw terminal',
         designator_prefix='J',
-        display_properties=['pins', 'pin spacing'],
-        id_match_pattern=r'screw_terminal_(?P<pins>\d+)_(?P<pin spacing>.*)',
+        display_properties=['part number', 'pins', 'pin spacing'],
+        id_match_pattern=r'^screw_terminal_(?P<pins>\d+)_(?P<pin_spacing>[^_]*)',
     ),
-    'generic IC': TemplatedPartFamily(
+    TemplatedPartFamily(
+        # Family: "generic IC"
         title='Generic DIP', # TODO incorporate chip label with template str
         desc='A generic DIP IC',
         designator_prefix='IC',
-        display_properties=['chip label', 'pins', 'pin spacing'],
-        id_match_pattern=r'generic_ic_dip_(?P<pins>\d+)_(?P<pin spacing>.*)',
+        display_properties=['chip label', 'part number', 'pins', 'pin spacing'],
+        id_match_pattern=r'^generic_ic_dip_(?P<pins>\d+)_(?P<pin_spacing>[^_]*)',
     ),
-}
+]
 
 
 # This is a list of properties to show in the description of a part even if the part
@@ -265,14 +270,21 @@ def create_templated_part(
     pin_count = int(combined_props['pins'])  # This key must exist
     # TODO use local pin names if they exist
     pins = {
-        f"connector{i}": PartPin(f"connector{i}", f"{i + 1}")
+        f"connector{i}": PartPin(
+            pin_id=f"connector{i}",
+            short_name=f"{i + 1}",
+            description=None,
+        )
         for i in range(pin_count)
     }
+
+    parenthetical = format_parenthetical_props(combined_props, family_spec.display_properties)
+    short_name = family_spec.title + parenthetical
 
 
     return FzPart(
         part_id=module_id,
-        short_name=family_spec.title,
+        short_name=short_name,
         description=family_spec.desc,
         pins=pins,
         designator_prefix=family_spec.designator_prefix,
@@ -448,13 +460,19 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             # Don't create a part instance for wires, we'll eliminate them later
             continue
 
-        templated_family_spec = TEMPLATED_PART_FAMILIES.get(properties['family'])
-        if templated_family_spec:
-            part = create_templated_part(templated_family_spec, module_id_ref, properties)
-        elif FACTORY_PART_MODULE_ID_SUFFIXES.has(module_id_ref):
+        if FACTORY_PART_MODULE_ID_SUFFIXES.has(module_id_ref):
             part = create_factory_part(parts_bin, module_id_ref, properties)
-        else:
+        elif module_id_ref in parts_bin:
             part = parts_bin[module_id_ref]
+        else:
+            # Look for a templated part
+            for family_spec in TEMPLATED_PART_FAMILIES:
+                if family_spec.matches(module_id_ref):
+                    part = create_templated_part(family_spec, module_id_ref, properties)
+                    break
+
+            if part is None:
+                raise RuntimeError(f"No spec found for part with ID {module_id_ref}")
 
         designator_counts[part.designator_prefix] += 1
 
