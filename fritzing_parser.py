@@ -146,19 +146,55 @@ FACTORY_PART_LONG_DESCRIPTION_OVERRIDES = SuffixMatcher({
 TEMPLATED_PART_FAMILIES = [
     TemplatedPartFamily(
         # Family: "screw terminal"
+        id_match_pattern=r'^screw_terminal_(?P<pins>\d+)_(?P<pin_spacing>[^_]*)',
         title='Screw terminal',
         desc='Generic screw terminal',
         designator_prefix='J',
         display_properties=['part number', 'pins', 'pin spacing'],
-        id_match_pattern=r'^screw_terminal_(?P<pins>\d+)_(?P<pin_spacing>[^_]*)',
     ),
     TemplatedPartFamily(
         # Family: "generic IC"
+        id_match_pattern=r'^generic_ic_dip_(?P<pins>\d+)_(?P<pin_spacing>[^_]*)',
         title='Generic DIP', # TODO incorporate chip label with template str
         desc='A generic DIP IC',
         designator_prefix='IC',
         display_properties=['chip label', 'part number', 'pins', 'pin spacing'],
-        id_match_pattern=r'^generic_ic_dip_(?P<pins>\d+)_(?P<pin_spacing>[^_]*)',
+    ),
+    TemplatedPartFamily(
+        # Family: "pin header"
+        # TODO this can be divided into more varieties and more properties extracted; I didn't bother for now
+        # see my notes on formModule and the possible options
+        id_match_pattern=r'^generic.*_male_pin_header_(?P<pins>\d+)',
+        title='Generic male pin header',
+        desc='A generic male pin header; may be single or double row',
+        designator_prefix='J',
+        display_properties=['part number', 'pins'],
+    ),
+    TemplatedPartFamily(
+        # Family: "pin header"
+        # TODO this can be divided into more varieties and more properties extracted; I didn't bother for now
+        # see my notes on formModule and the possible options
+        id_match_pattern=r'^generic.*_female_pin_header_(?P<pins>\d+)',
+        title='Generic female pin header',
+        desc='A generic female pin header; may be single or double row',
+        designator_prefix='J',
+        display_properties=['part number', 'pins'],
+    ),
+    TemplatedPartFamily(
+        # Family: "pin header"
+        id_match_pattern=r'^generic_molex_pin_header_(?P<pins>\d+)',
+        title='Generic Molex pin header',
+        desc='A generic Molex pin header',
+        designator_prefix='J',
+        display_properties=['part number', 'pins'],
+    ),
+    TemplatedPartFamily(
+        # Family: "pin header"
+        id_match_pattern=r'^generic_shrouded_pin_header_(?P<pins>\d+)',
+        title='Generic shrouded pin header',
+        desc='A generic shrouded pin header',
+        designator_prefix='J',
+        display_properties=['part number', 'pins'],
     ),
 ]
 
@@ -209,7 +245,7 @@ def format_prop(prop_key: str, props: Dict[str, str]) -> str:
 def format_parenthetical_props(prop_values: Dict[str, str], display_properties: List[str]) -> str:
     parenthetical_props = ', '.join([
         f"{dp} {format_prop(dp, prop_values)}" for dp in display_properties
-            if prop_values[dp] # Ignore empty string or null props
+            if prop_values.get(dp) # Ignore empty string or null props
     ])
 
     if parenthetical_props:
