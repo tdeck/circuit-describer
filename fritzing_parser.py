@@ -351,7 +351,21 @@ def parse_part_file(fh: TextIOWrapper) -> FzPart:
         description = html_to_text(description)
 
     label_tag = module_tag.find('./label')
-    designator_prefix = 'U' if label_tag is None else label_tag.text
+    # Either label_tag or label_tag.text can be None
+    if label_tag is None or label_tag.text is None:
+        designator_prefix = 'U'
+    else:
+        designator_prefix = label_tag.text
+
+    # If the designator prefix is just a number, the parts view will be confusing
+    # so we add a prefix to it
+    if designator_prefix.isnumeric():
+        designator_prefix = 'UN' + designator_prefix  # "UN" is arbitrary
+
+    # If the designator prefix ends in a number, we get confusing part numbers
+    # so we add an underscore to it
+    if designator_prefix[-1].isnumeric():
+        designator_prefix += '_'
 
     property_tags = module_tag.findall("./properties/property")
     properties = {
