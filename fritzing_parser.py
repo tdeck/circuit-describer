@@ -420,7 +420,7 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
         e.get('modelIndex') for e in
             # Note: lxml's xpath doesn't support selecting attribute values directly, only nodes
             xml_doc.findall(f"./instances/instance")
-            if e.get('moduleIdRef') in [NET_LABEL_MODULE_ID, WIRE_MODULE_ID]
+            if e.get('moduleIdRef') in [NET_LABEL_MODULE_ID, WIRE_MODULE_ID, GROUND_MODULE_ID]
     ])
     net_labels: Dict[str, str] = {}  # Maps net label node instance IDs to the net's name
 
@@ -500,9 +500,9 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
 
             adjacencies.add(sort_adj(schematic_pin_ref, implicit_ground_net_ref))
 
-            # Mark the original ground symbol as a wire so it doesn't show up as a
-            # distinct entity after traversing the graph
-            connector_instance_ids.add(instance_id)
+            # Note: The original ground symbol is marked as a connector already
+            # (see construction of connector_instance_ids) so it will not be displayed
+            # as its own part and will be traversed in the net coalescing step
 
         elif is_net_label:
             # Net labels are implicitly connected to all other net labels of the same name,

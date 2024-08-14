@@ -16,7 +16,16 @@
             <span id="bom-{{inst.designator}}">{{ inst.designator }}</span>{% if not loop.last %}, {% endif %}
           {% endfor %}
         </td>
-        <td><a href="#desc-{{ part.part.part_id|urlencode }}">{{ part.part.short_name }}</a></td>
+        <td>
+            {# Only add link to part details section if it exists #}
+            {% if part.part.should_show_part_details %}
+                <a href="#desc-{{ part.part.part_id|urlencode }}">
+            {% endif %}
+            {{ part.part.short_name }}
+            {% if part.part.should_show_part_details %}
+                </a>
+            {% endif %}
+        </td>
         <td>{{ part.instances | length }}</td>
       </tr>
     {% endfor %}
@@ -46,7 +55,14 @@ All points in a row of the nets table are connected by wires.
         <td>
           <ul>
             {% for conn in net.connections %}
-              <li><a href="#bom-{{conn.part_instance.designator}}">{{ conn.part_instance.designator }}</a> {{ conn.part_instance.part.pin_reference(conn.pin_id) }}</li>
+                <li>
+                    {# Only add link to BOM line if it exists #}
+                    {% if conn.part_instance.part.should_show_in_bom() %}
+                        <a href="#bom-{{conn.part_instance.designator}}">
+                    {% endif %}
+                    {{ conn.part_instance.designator }}</a> {{ conn.part_instance.part.pin_reference(conn.pin_id) }}
+                    {% if conn.part_instance.part.should_show_in_bom() %}</a>{% endif %}
+                </li>
             {% endfor %}
           </ul>
         </td>
@@ -56,7 +72,7 @@ All points in a row of the nets table are connected by wires.
 </table>
 
 <h2>Detailed part info</h2>
-{% for part in parts %}
+{% for part in parts if part.part.should_show_part_details() %}
   <h3 id="desc-{{part.part.part_id|urlencode}}">{{ part.part.short_name }}</h3>
   <pre>{{ part.part.description }}</pre>
 

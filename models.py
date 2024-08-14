@@ -39,6 +39,9 @@ class Part:
         else:
             return f"{short_name} {kind}"  # e.g. "+ lead", "SCK / PB0 pin"p.short_name 
 
+    def should_show_part_details(self):
+        return self.description is not None or self.should_show_pin_descriptions()
+
     def should_show_pin_descriptions(self):
         # Don't show a table for just a couple of pins
         if len(self.pins) < 3:
