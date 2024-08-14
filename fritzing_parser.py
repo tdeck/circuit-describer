@@ -201,7 +201,7 @@ TEMPLATED_PART_FAMILIES = [
 
 # This is a list of properties to show in the description of a part even if the part
 # does not have showInLabel=true for these props; all lowercase
-PROPERTIES_TO_ALWAYS_DISPLAY = {'voltage'}
+PROPERTIES_TO_ALWAYS_DISPLAY = {'voltage', 'part number'}
 
 PROPERTY_UNITS = {
     'voltage': 'V',
@@ -411,7 +411,6 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
 
     schematic = Schematic()
     adjacencies: Set[Tuple[PinRef, PinRef]] = set()
-    designator_counts = Counter()
 
     for instance in xml_doc.findall('./instances/instance'):
         module_id_ref = instance.get('moduleIdRef')
@@ -425,6 +424,8 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
         instance_id = instance.get('modelIndex')
 
         has_connection = False
+
+        part_designator = instance.find('./title').text
 
         # Find all the connections and put them in the adjacency list
         for connector in schematic_view.findall('./connectors/connector'):
@@ -510,12 +511,10 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             if part is None:
                 raise RuntimeError(f"No spec found for part with ID {module_id_ref}")
 
-        designator_counts[part.designator_prefix] += 1
-
         part_instance = PartInstance(
             part_instance_id=instance_id,
             part=part,
-            designator=part.designator_prefix + str(designator_counts[part.designator_prefix])
+            designator=part_designator,
         )
 
         if has_connection:
