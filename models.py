@@ -24,7 +24,13 @@ class Part:
     # TODO properties: Dict[str, str] # Relevant key-value properties like resistance, capacitance, package, etc...
     pins: Dict[PinID, PartPin]
 
+    def should_show_in_bom(self) -> bool:
+        return self != GROUND_PART
+
     def pin_reference(self, pin_id: PinID) -> str:
+        if self == GROUND_PART:
+            return '' # Don't need a pin name for ground
+
         kind = 'lead' if len(self.pins) <= 3 else 'pin'
 
         short_name = self.pins[pin_id].short_name
@@ -79,3 +85,17 @@ class Node:
 class Schematic:
     part_instances_by_id: Dict[PartInstanceID, PartInstance] = field(default_factory=dict)
     nodes_by_id: Dict[NodeID, Node] = field(default_factory=dict)
+
+GROUND_PART = Part(
+    part_id='GROUND',
+    short_name='Ground',
+    description=None,
+    designator_prefix='',
+    pins={'common': PartPin('common', 'common', None)}
+)
+
+GROUND_PART_INSTANCE = PartInstance(
+    part_instance_id= 'net:GROUND',
+    designator= 'GND',
+    part=GROUND_PART,
+)

@@ -22,6 +22,7 @@ PartInstanceID is a fritzing modelIndex.
 PART_EXTENSION = '.fzp'
 WIRE_MODULE_ID = 'WireModuleID'
 NET_LABEL_MODULE_ID = 'NetLabelModuleID'
+GROUND_MODULE_ID = 'GroundModuleID'
 SCHEMATIC_LAYERS = {'schematic', 'schematicTrace'}
 
 # These resources are usually built into the binary by Qt so I had to get them from GitHub
@@ -427,10 +428,15 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
     adjacencies: Set[Tuple[PinRef, PinRef]] = set()
     designator_counts = Counter()
 
+    # Pre-populate a ground node and net
+    net_labels[GROUND_PART_INSTANCE.part_instance_id] = GROUND_PART.short_name
+    schematic.part_instances_by_id[GROUND_PART_INSTANCE.part_instance_id] = GROUND_PART_INSTANCE
+
     for instance in xml_doc.findall('./instances/instance'):
         module_id_ref = instance.get('moduleIdRef')
         is_net_label = module_id_ref == NET_LABEL_MODULE_ID
         is_wire = module_id_ref == WIRE_MODULE_ID
+        is_ground = module_id_ref == GROUND_MODULE_ID
 
         schematic_view = instance.find('./views/schematicView')
         if schematic_view is None or schematic_view.get('layer') not in SCHEMATIC_LAYERS:  # This could be a PCB or breadboard-only symbol
@@ -446,7 +452,7 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
                 continue # TODO test
 
             # Treat all endpoints of a wire as the same node so they end up adjacent
-            if is_wire or is_net_label:
+            if is_wire or is_net_label or is_ground:
                 pin_id = 'common'
             else:
                 pin_id = connector.get('connectorId')
@@ -478,7 +484,27 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
             for prop_tag in instance.findall("./property") or []
         }
 
-        if is_net_label:
+        if is_ground:
+            # All grounds are connected to the same singleton ground part, and then the parts
+            # that were the schmeatic grounds from the FZ file are treated as wires, so we
+            # traverse through them to reach the actual ground.
+            schematic_pin_ref = PinRef(
+                part_instance_id=instance_id,
+                pin_id='common',
+            )
+
+            implicit_ground_net_ref = PinRef(
+                part_instance_id=GROUND_PART_INSTANCE.part_instance_id,
+                pin_id=list(GROUND_PART.pins.keys())[0],
+            )
+
+            adjacencies.add(sort_adj(schematic_pin_ref, implicit_ground_net_ref))
+
+            # Mark the original ground symbol as a wire so it doesn't show up as a
+            # distinct entity after traversing the graph
+            connector_instance_ids.add(instance_id)
+
+        elif is_net_label:
             # Net labels are implicitly connected to all other net labels of the same name,
             # so we create a virtual wire from the net label's common pin to a node based
             # on the net name
@@ -499,14 +525,16 @@ def parse_schematic(parts_bin: PartsBin, fh: TextIOWrapper) -> Schematic:
 
             adjacencies.add(sort_adj(schematic_pin_ref, implicit_net_ref))
 
-            # Treat this as a wire too
+            # Treat this fake net node as a wire
+            # (note that the net node from the FZ file will already be marked as a wire
+            # when we initialized connector_instance_ids above)
             connector_instance_ids.add(net_node_instance_id)
 
             # Record the label for later
             net_labels[net_node_instance_id] = net_name
 
 
-        if is_wire or is_net_label:
+        if is_wire or is_net_label or is_ground:
             # Don't create a part instance for wires, we'll eliminate them later
             continue
 
